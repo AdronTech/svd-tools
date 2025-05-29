@@ -42,14 +42,14 @@ class GdbSvd(gdb.Command):
                 raise Exception("Invalid parameter")
 
             pathfile = argv[0]
-            gdb.write("Svd Loading {} ".format(pathfile))
+            gdb.write(f"Svd Loading {pathfile} ")
             parser = SVDParser.for_xml_file(pathfile)
             device = parser.get_device()
 
             peripherals = dict((peripheral.name,peripheral) for peripheral in device.peripherals)
 
         except Exception as inst:
-            gdb.write("\n{}\n".format(inst))
+            gdb.write(f"\n{inst}\n")
             gdb.execute("help svd")
         except IOError:
             gdb.write("\nFailed to load SVD file\n")
@@ -135,7 +135,7 @@ class GdbSvdCmd(gdb.Command):
             except Exception as err:
                 v_err = str(err)
 
-            addr = "0x{:08x}".format(addr)
+            addr = f"{addr:#08x}"
             registers_val += [{"name": reg.name,
                                "addr": addr,
                                "value": val,
@@ -152,7 +152,7 @@ class GdbSvdCmd(gdb.Command):
         for f in fields:
             lsb = f.bit_offset
             msb = f.bit_offset + f.bit_width - 1
-            fname = "{}[{}:{}]".format(f.name, msb, lsb)
+            fname = f"{f.name}[{msb}:{lsb}]"
             fieldval = (reg_values >> lsb) & ((1 << f.bit_width) - 1)
             fields_val += [{"name": fname, "bit_offset": f.bit_offset, "bit_width": f.bit_width, "value": fieldval}]
 
@@ -165,7 +165,7 @@ class GdbSvdCmd(gdb.Command):
             desc_title = "Fields"
             table_show.append(["name", "[msb:lsb]", "access", "description"])
             for f in fields:
-                mlsb = "[{}:{}]".format(f.bit_offset, f.bit_offset + f.bit_width - 1)
+                mlsb = f"[{f.bit_offset}:{f.bit_offset + f.bit_width - 1}]"
                 desc = '\n'.join(wrap(f.description, self.column_with))
                 table_show.append([f.name, mlsb, f.access, desc])
         elif registers is not None:
@@ -174,16 +174,16 @@ class GdbSvdCmd(gdb.Command):
             for r in registers:
                 addr = r.parent.base_address + r.address_offset
                 desc = '\n'.join(wrap(r.description, self.column_with))
-                table_show.append([r.name, "{:#x}".format(addr), r.access, desc])
+                table_show.append([r.name, f"{addr:#x}", r.access, desc])
         elif peripherals is not None:
             desc_title = "Peripherals"
             table_show.append(["name", "base", "access", "description"])
             for p in peripherals:
                 desc = '\n'.join(wrap(p.description, self.column_with))
-                table_show.append([p.name, "{:#x}".format(p.base_address), p.access, desc])
+                table_show.append([p.name, f"{p.base_address:#x}", p.access, desc])
 
         desc_table = AsciiTable(table_show, title = desc_title)
-        gdb.write("{}\n".format(desc_table.table))
+        gdb.write(f"{desc_table.table}\n")
 
     def print_registers(self, peripheral, registers, output_file_name = "None", syntax_highlighting = True ):
         regs_table = []
@@ -199,7 +199,7 @@ class GdbSvdCmd(gdb.Command):
                 for f in fields:
                     field_reset_value = r["reset_value"] >> f["bit_offset"] & ((1 << f["bit_width"]) - 1)
 
-                    if f["value"] != field_reset_value and syntax_highlighting == True:
+                    if syntax_highlighting and f["value"] != field_reset_value:
                         f_str.append("\033[94m{name}={value:#x}\033[0m".format(**f))
                     else:
                         f_str.append("{name}={value:#x}".format(**f))
@@ -208,11 +208,11 @@ class GdbSvdCmd(gdb.Command):
 
             val_str = ""
             if r["error"] is not None:
-                val_str = "\033[91m{}\033[0m".format(r["error"])
+                val_str = f"\033[91m{r['error']}\033[0m"
             elif r["value"] is None:
                 val_str = r["access"].value
             else:
-                if r["value"] != r["reset_value"] and syntax_highlighting == True:
+                if syntax_highlighting and r["value"] != r["reset_value"]:
                     val_str = "\033[94m{value:#x}({reset_value:#x})\033[0m".format(**r)
                 else:
                     val_str = "{value:#x}({reset_value:#x})".format(**r)
@@ -222,11 +222,11 @@ class GdbSvdCmd(gdb.Command):
         rval_table = AsciiTable(regs_table, title=peripheral.name)
 
         if output_file_name == "None":
-            gdb.write("{}\n".format(rval_table.table))
+            gdb.write(f"{rval_table.table}\n")
         else:
             try:
                 file_object = open(output_file_name, "a")
-                file_object.write("{}\n".format(rval_table.table))
+                file_object.write(f"{rval_table.table}\n")
                 file_object.close()
             except:
                 gdb.write("Error writting to file \n")
@@ -321,7 +321,7 @@ class GdbSvdGetCmd(GdbSvdCmd):
             GdbSvdCmd.print_registers(self, periph, regs)
 
         except Exception as inst:
-            gdb.write("{}\n".format(inst))
+            gdb.write(f"{inst}\n")
         except:
             gdb.write("Error cannot get the value\n")
 
@@ -369,7 +369,7 @@ class GdbSvdSetCmd(GdbSvdCmd):
             GdbSvdCmd.set_register(self, periph, reg, value, field)
 
         except Exception as inst:
-            gdb.write("{}\n".format(inst))
+            gdb.write(f"{inst}\n")
 
         except:
             gdb.write("Error cannot set the value\n")
@@ -451,7 +451,7 @@ class GdbSvdDumpCmd(GdbSvdCmd):
             return
         try:
             output_file_name = args[0]
-            gdb.write("Print to file: {}\n".format(output_file_name))
+            gdb.write(f"Print to file: {output_file_name}\n")
 
             if len(args) >= 2:
                 periph_name = args[1].upper()
@@ -468,6 +468,6 @@ class GdbSvdDumpCmd(GdbSvdCmd):
                     regs = per.registers
                     GdbSvdCmd.print_registers(self, per, regs, output_file_name, False)
             except:
-                gdb.write("Error writting to file: {}\n".format(output_file_name))
+                gdb.write(f"Error writting to file: {output_file_name}\n")
         except:
             gdb.write("Error cannot dump registers\n")
