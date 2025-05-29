@@ -22,6 +22,7 @@ It's a python module for gdb. This adds some gdb commands to:
 - [gdb](https://www.gnu.org/software/gdb/)
 - [cmsis-svd](https://pypi.org/project/cmsis-svd/) python: cmsis-svd parser
 - [terminaltables](https://pypi.org/project/terminaltables/) python: terminaltables
+- [colorama](https://pypi.org/project/colorama/) python: colorama for colored output
 
 > On microprocessor: I advise to use openocd, in order to access at physical memory
 > without need to enable/disable MMU (thanks to openocd with `mdw phys`
