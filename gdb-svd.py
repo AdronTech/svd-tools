@@ -20,7 +20,7 @@
 import re
 import gdb
 from terminaltables import AsciiTable
-from cmsis_svd.parser import SVDParser
+from cmsis_svd.parser import SVDParser, SVDAccessType
 from textwrap import wrap
 
 class GdbSvd(gdb.Command):
@@ -98,7 +98,7 @@ class GdbSvdCmd(gdb.Command):
 
         if nb_args == 1:
             filt = filter(lambda x: x.upper().startswith(args[0].upper()), self.peripherals)
-            return filt
+            return list(filt)
 
         periph_name = args[0].upper()
         periph = self.peripherals[periph_name]
@@ -106,7 +106,7 @@ class GdbSvdCmd(gdb.Command):
 
         if nb_args == 2 and reg_names:
             filt = filter(lambda x: x.upper().startswith(args[1].upper()), reg_names)
-            return filt
+            return list(filt)
 
         reg_name =  args[1].upper()
         reg = [r for r in periph.registers if r.name == reg_name][0]
@@ -114,7 +114,7 @@ class GdbSvdCmd(gdb.Command):
 
         if nb_args == 3 and field_names:
             filt = filter(lambda x: x.upper().startswith(args[2].upper()), field_names)
-            return filt
+            return list(filt)
 
         return gdb.COMPLETE_NONE
 
@@ -124,23 +124,24 @@ class GdbSvdCmd(gdb.Command):
         for reg in registers:
             addr = peripheral.base_address + reg.address_offset
 
+            fval = ""
+            val = 0
+            v_err = None
             try:
                 val = self.read(peripheral, reg)
 
-                if val is None:
-                    fval = val
-                    val = reg.access
-                else:
+                if val is not None:
                     fval = self.get_fields_val(reg.fields, val)
-                    val = "0x{:08x}".format(val)
-            except:
-                val = "DataAbort"
-                fval = ""
+            except Exception as err:
+                v_err = str(err)
 
             addr = "0x{:08x}".format(addr)
             registers_val += [{"name": reg.name,
                                "addr": addr,
                                "value": val,
+                               "access": reg.access,
+                               "reset_value": reg.reset_value,
+                               "error": v_err,
                                "fields": fval}]
 
         return registers_val
@@ -153,7 +154,7 @@ class GdbSvdCmd(gdb.Command):
             msb = f.bit_offset + f.bit_width - 1
             fname = "{}[{}:{}]".format(f.name, msb, lsb)
             fieldval = (reg_values >> lsb) & ((1 << f.bit_width) - 1)
-            fields_val += [{"name": fname, "value": fieldval}]
+            fields_val += [{"name": fname, "bit_offset": f.bit_offset, "bit_width": f.bit_width, "value": fieldval}]
 
         return fields_val
 
@@ -196,13 +197,28 @@ class GdbSvdCmd(gdb.Command):
             fields = r["fields"]
             if fields is not None:
                 for f in fields:
-                    if f["value"] > 0 and syntax_highlighting == True:
+                    field_reset_value = r["reset_value"] >> f["bit_offset"] & ((1 << f["bit_width"]) - 1)
+
+                    if f["value"] != field_reset_value and syntax_highlighting == True:
                         f_str.append("\033[94m{name}={value:#x}\033[0m".format(**f))
                     else:
                         f_str.append("{name}={value:#x}".format(**f))
 
             f_str = '\n'.join(wrap(" ".join(f_str), self.column_with))
-            regs_table.append([r["name"], r["addr"], r["value"], f_str])
+
+            val_str = ""
+            if r["error"] is not None:
+                val_str = "\033[91m{}\033[0m".format(r["error"])
+            elif r["value"] is None:
+                val_str = r["access"].value
+            else:
+                if r["value"] != r["reset_value"] and syntax_highlighting == True:
+                    val_str = "\033[94m{value:#x}({reset_value:#x})\033[0m".format(**r)
+                else:
+                    val_str = "{value:#x}({reset_value:#x})".format(**r)
+
+
+            regs_table.append([r["name"], r["addr"], val_str, f_str])
         rval_table = AsciiTable(regs_table, title=peripheral.name)
 
         if output_file_name == "None":
@@ -239,10 +255,10 @@ class GdbSvdCmd(gdb.Command):
         """ Read register and return an integer
         """
         #access could be not defined for a register
-        if register.access in [None, "read-only", "read-write", "read-writeOnce"]:
+        if register.access in [None, SVDAccessType.READ_ONLY, SVDAccessType.READ_WRITE, SVDAccessType.READ_WRITE_ONCE]:
             addr = peripheral.base_address + register.address_offset
             cmd = self.read_cmd.format(address=addr)
-            pattern = re.compile('(?P<ADDR>\w+):( *?(?P<VALUE>[a-f0-9]+))')
+            pattern = re.compile(r'(?P<ADDR>\w+):( *?(?P<VALUE>[a-f0-9]+))')
 
             try:
                 match = re.search(pattern, gdb.execute(cmd, False, True))
@@ -257,7 +273,7 @@ class GdbSvdCmd(gdb.Command):
     def write(self, peripheral, register, val):
         """ Write data to memory
         """
-        if register.access in [None, "write-only", "read-write", "writeOnce", "read-writeOnce"]:
+        if register.access in [None, SVDAccessType.WRITE_ONLY, SVDAccessType.READ_WRITE, SVDAccessType.WRITE_ONCE, SVDAccessType.READ_WRITE_ONCE]:
             addr = peripheral.base_address + register.address_offset
             cmd = self.write_cmd.format(address=addr, value=val)
 
@@ -384,11 +400,16 @@ class GdbSvdInfoCmd(GdbSvdCmd):
             periph_name = args[0].upper()
             periphs = list(filter(lambda x: x.name.startswith(periph_name), self.device.peripherals))
             regs = fields = None
+            if len(periphs) == 1 and len(args) == 1:
+                args.append("")
 
             if len(args) >= 2:
                 per = [ per for per in periphs if per.name == periph_name ][0]
                 reg_name =  args[1].upper()
                 regs = list(filter(lambda x: x.name.startswith(reg_name), per.registers))
+                
+                if len(regs) == 1 and regs[0].name == reg_name:
+                    args.append("")
 
             if len(args) >= 3:
                 reg = [ reg for reg in regs if reg.name == reg_name ][0]
