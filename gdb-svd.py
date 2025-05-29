@@ -24,25 +24,32 @@ from cmsis_svd.parser import SVDParser, SVDAccessType
 from textwrap import wrap
 from colorama import Fore, Style
 
+
 def error(msg):
     return f"{Fore.RED}{msg}{Style.RESET_ALL}"
+
 
 def warning(msg):
     return f"{Fore.YELLOW}{msg}{Style.RESET_ALL}"
 
+
 def info(msg):
     return f"{Fore.BLUE}{msg}{Style.RESET_ALL}"
+
 
 def highlight(msg):
     return f"{Fore.CYAN}{msg}{Style.RESET_ALL}"
 
+
 def colorize_prefix(prefix, txt):
     if not txt.startswith(prefix):
         return txt
-    return f"{highlight(prefix)}{txt[len(prefix):]}"
+    return f"{highlight(prefix)}{txt[len(prefix) :]}"
+
 
 def heading(columns):
     return [f"{Fore.BLACK}{col}{Style.RESET_ALL}" for col in columns]
+
 
 class GdbSvd(gdb.Command):
     """The CMSIS SVD (System View Description) inspector commands
@@ -53,8 +60,11 @@ class GdbSvd(gdb.Command):
     svd [filename] load an SVD file and to create the command for inspecting
     that object
     """
+
     def __init__(self):
-        gdb.Command.__init__(self, "svd", gdb.COMMAND_DATA, gdb.COMPLETE_FILENAME, prefix = True)
+        gdb.Command.__init__(
+            self, "svd", gdb.COMMAND_DATA, gdb.COMPLETE_FILENAME, prefix=True
+        )
 
     def invoke(self, arg, from_tty):
         try:
@@ -67,7 +77,9 @@ class GdbSvd(gdb.Command):
             parser = SVDParser.for_xml_file(pathfile)
             device = parser.get_device()
 
-            peripherals = dict((peripheral.name,peripheral) for peripheral in device.peripherals)
+            peripherals = dict(
+                (peripheral.name, peripheral) for peripheral in device.peripherals
+            )
 
         except Exception as inst:
             gdb.write(f"\n{inst}\n")
@@ -82,8 +94,10 @@ class GdbSvd(gdb.Command):
             GdbSvdInfoCmd(device, peripherals)
             GdbSvdDumpCmd(device, peripherals)
 
+
 if __name__ == "__main__":
     GdbSvd()
+
 
 class GdbSvdCmd(gdb.Command):
     def __init__(self, device, peripherals):
@@ -118,7 +132,9 @@ class GdbSvdCmd(gdb.Command):
         nb_args = len(args)
 
         if nb_args == 1:
-            filt = filter(lambda x: x.upper().startswith(args[0].upper()), self.peripherals)
+            filt = filter(
+                lambda x: x.upper().startswith(args[0].upper()), self.peripherals
+            )
             return list(filt)
 
         periph_name = args[0].upper()
@@ -129,7 +145,7 @@ class GdbSvdCmd(gdb.Command):
             filt = filter(lambda x: x.upper().startswith(args[1].upper()), reg_names)
             return list(filt)
 
-        reg_name =  args[1].upper()
+        reg_name = args[1].upper()
         reg = [r for r in periph.registers if r.name == reg_name][0]
         field_names = [field.name for field in reg.fields]
 
@@ -157,13 +173,17 @@ class GdbSvdCmd(gdb.Command):
                 v_err = str(err)
 
             addr = f"{addr:#08x}"
-            registers_val += [{"name": reg.name,
-                               "addr": addr,
-                               "value": val,
-                               "access": reg.access,
-                               "reset_value": reg.reset_value,
-                               "error": v_err,
-                               "fields": fval}]
+            registers_val += [
+                {
+                    "name": reg.name,
+                    "addr": addr,
+                    "value": val,
+                    "access": reg.access,
+                    "reset_value": reg.reset_value,
+                    "error": v_err,
+                    "fields": fval,
+                }
+            ]
 
         return registers_val
 
@@ -175,23 +195,32 @@ class GdbSvdCmd(gdb.Command):
             msb = f.bit_offset + f.bit_width - 1
             fname = f"{f.name}[{msb}:{lsb}]"
             fieldval = (reg_values >> lsb) & ((1 << f.bit_width) - 1)
-            fields_val += [{"name": fname, "bit_offset": f.bit_offset, "bit_width": f.bit_width, "value": fieldval}]
+            fields_val += [
+                {
+                    "name": fname,
+                    "bit_offset": f.bit_offset,
+                    "bit_width": f.bit_width,
+                    "value": fieldval,
+                }
+            ]
 
         return fields_val
 
-    def print_desc_peripherals(self, peripherals, periph_prefix = ""):
+    def print_desc_peripherals(self, peripherals, periph_prefix=""):
         table_show = []
         table_show.append(heading(["name", "base", "access", "description"]))
         for peripheral in peripherals:
             name = colorize_prefix(periph_prefix, peripheral.name)
 
-            desc = '\n'.join(wrap(peripheral.description, self.column_with))
-            table_show.append([name, f"{peripheral.base_address:#08x}", peripheral.access, desc])
+            desc = "\n".join(wrap(peripheral.description, self.column_with))
+            table_show.append(
+                [name, f"{peripheral.base_address:#08x}", peripheral.access, desc]
+            )
 
         desc_table = AsciiTable(table_show, title=" Peripherals ")
         gdb.write(f"{desc_table.table}\n")
 
-    def print_desc_registers(self, periph_name, registers, reg_prefix = ""):
+    def print_desc_registers(self, periph_name, registers, reg_prefix=""):
         table_rows = []
         table_rows.append(heading(["name", "address", "access", "description"]))
         for register in registers:
@@ -201,10 +230,12 @@ class GdbSvdCmd(gdb.Command):
             desc = "\n".join(wrap(register.description, self.column_with))
             table_rows.append([name, f"{addr:#08x}", register.access.value, desc])
 
-        desc_table = AsciiTable(table_rows, title=f" {highlight(periph_name)} Registers ")
+        desc_table = AsciiTable(
+            table_rows, title=f" {highlight(periph_name)} Registers "
+        )
         gdb.write(f"{desc_table.table}\n")
 
-    def print_desc_fields(self, reg_name, fields, field_prefix = ""):
+    def print_desc_fields(self, reg_name, fields, field_prefix=""):
         table_rows = []
         table_rows.append(heading(["name", "[msb:lsb]", "access", "description"]))
         for field in fields:
@@ -219,8 +250,9 @@ class GdbSvdCmd(gdb.Command):
         desc_table = AsciiTable(table_rows, title=f" {highlight(reg_name)} Fields ")
         gdb.write(f"{desc_table.table}\n")
 
-
-    def print_registers(self, peripheral, registers, output_file_name = "None", syntax_highlighting = True ):
+    def print_registers(
+        self, peripheral, registers, output_file_name="None", syntax_highlighting=True
+    ):
         regs_table = []
         reg_val = []
         regs_table.append(["name", "address", "value", "fields"])
@@ -232,14 +264,16 @@ class GdbSvdCmd(gdb.Command):
             fields = r["fields"]
             if fields is not None:
                 for f in fields:
-                    field_reset_value = r["reset_value"] >> f["bit_offset"] & ((1 << f["bit_width"]) - 1)
+                    field_reset_value = r["reset_value"] >> f["bit_offset"] & (
+                        (1 << f["bit_width"]) - 1
+                    )
 
                     if syntax_highlighting and f["value"] != field_reset_value:
                         f_str.append("\033[94m{name}={value:#x}\033[0m".format(**f))
                     else:
                         f_str.append("{name}={value:#x}".format(**f))
 
-            f_str = '\n'.join(wrap(" ".join(f_str), self.column_with))
+            f_str = "\n".join(wrap(" ".join(f_str), self.column_with))
 
             val_str = ""
             if r["error"] is not None:
@@ -251,7 +285,6 @@ class GdbSvdCmd(gdb.Command):
                     val_str = "\033[94m{value:#x}({reset_value:#x})\033[0m".format(**r)
                 else:
                     val_str = "{value:#x}({reset_value:#x})".format(**r)
-
 
             regs_table.append([r["name"], r["addr"], val_str, f_str])
         rval_table = AsciiTable(regs_table, title=peripheral.name)
@@ -266,16 +299,16 @@ class GdbSvdCmd(gdb.Command):
             except:
                 gdb.write("Error writting to file \n")
 
-    def set_register(self, peripheral, register, value, field = None):
+    def set_register(self, peripheral, register, value, field=None):
         val = value
         if field is not None:
-            max_val = ((1 << field.bit_width) - 1)
+            max_val = (1 << field.bit_width) - 1
             if value > max_val:
                 raise Exception("Invalid value, > max of field")
 
             mask = max_val << field.bit_offset
 
-            #read register value with gdb
+            # read register value with gdb
             val = self.read(peripheral, register)
             if val is None:
                 raise Exception("Register not readable")
@@ -287,28 +320,37 @@ class GdbSvdCmd(gdb.Command):
         self.write(peripheral, register, val)
 
     def read(self, peripheral, register):
-        """ Read register and return an integer
-        """
-        #access could be not defined for a register
-        if register.access in [None, SVDAccessType.READ_ONLY, SVDAccessType.READ_WRITE, SVDAccessType.READ_WRITE_ONCE]:
+        """Read register and return an integer"""
+        # access could be not defined for a register
+        if register.access in [
+            None,
+            SVDAccessType.READ_ONLY,
+            SVDAccessType.READ_WRITE,
+            SVDAccessType.READ_WRITE_ONCE,
+        ]:
             addr = peripheral.base_address + register.address_offset
             cmd = self.read_cmd.format(address=addr)
-            pattern = re.compile(r'(?P<ADDR>\w+):( *?(?P<VALUE>[a-f0-9]+))')
+            pattern = re.compile(r"(?P<ADDR>\w+):( *?(?P<VALUE>[a-f0-9]+))")
 
             try:
                 match = re.search(pattern, gdb.execute(cmd, False, True))
-                val = int(match.group('VALUE'), 16)
+                val = int(match.group("VALUE"), 16)
             except Exception as err:
-                #if openocd can't access to addr => data abort
+                # if openocd can't access to addr => data abort
                 return err
             return val
         else:
             return None
 
     def write(self, peripheral, register, val):
-        """ Write data to memory
-        """
-        if register.access in [None, SVDAccessType.WRITE_ONLY, SVDAccessType.READ_WRITE, SVDAccessType.WRITE_ONCE, SVDAccessType.READ_WRITE_ONCE]:
+        """Write data to memory"""
+        if register.access in [
+            None,
+            SVDAccessType.WRITE_ONLY,
+            SVDAccessType.READ_WRITE,
+            SVDAccessType.WRITE_ONCE,
+            SVDAccessType.READ_WRITE_ONCE,
+        ]:
             addr = peripheral.base_address + register.address_offset
             cmd = self.write_cmd.format(address=addr, value=val)
 
@@ -316,10 +358,11 @@ class GdbSvdCmd(gdb.Command):
         else:
             raise Exception("Register not writable")
 
+
 # sub commands
 class GdbSvdGetCmd(GdbSvdCmd):
-    """Get register(s) value(s): svd get [peripheral] [register]
-    """
+    """Get register(s) value(s): svd get [peripheral] [register]"""
+
     def __init__(self, device, peripherals):
         GdbSvdCmd.__init__(self, device, peripherals)
         gdb.Command.__init__(self, "svd get", gdb.COMMAND_DATA)
@@ -360,9 +403,10 @@ class GdbSvdGetCmd(GdbSvdCmd):
         except:
             gdb.write("Error cannot get the value\n")
 
+
 class GdbSvdSetCmd(GdbSvdCmd):
-    """Set register value: svd set <peripheral> <register> [field] <value>
-    """
+    """Set register value: svd set <peripheral> <register> [field] <value>"""
+
     def __init__(self, device, peripherals):
         GdbSvdCmd.__init__(self, device, peripherals)
         gdb.Command.__init__(self, "svd set", gdb.COMMAND_DATA)
@@ -391,7 +435,7 @@ class GdbSvdSetCmd(GdbSvdCmd):
             return
 
         try:
-            reg_name =  args[1].upper()
+            reg_name = args[1].upper()
             reg = [r for r in periph.registers if r.name == reg_name][0]
             field = None
             if len(args) == 4:
@@ -409,9 +453,10 @@ class GdbSvdSetCmd(GdbSvdCmd):
         except:
             gdb.write("Error cannot set the value\n")
 
+
 class GdbSvdInfoCmd(GdbSvdCmd):
-    """Info on Peripheral|register|field: svd info <peripheral> [register] [field]
-    """
+    """Info on Peripheral|register|field: svd info <peripheral> [register] [field]"""
+
     def __init__(self, device, peripherals):
         GdbSvdCmd.__init__(self, device, peripherals)
         gdb.Command.__init__(self, "svd info", gdb.COMMAND_DATA)
@@ -435,24 +480,34 @@ class GdbSvdInfoCmd(GdbSvdCmd):
             return
 
         periph_name = args[0].upper()
-        periphs = list(filter(lambda x: x.name.startswith(periph_name), self.device.peripherals))
+        periphs = list(
+            filter(lambda x: x.name.startswith(periph_name), self.device.peripherals)
+        )
 
         if len(periphs) == 0:
             gdb.write(error(f"No peripheral with prefix '{periph_name}'\n"))
             GdbSvdCmd.print_desc_peripherals(self, self.device.peripherals)
             return
-        
+
         if len(periphs) > 1:
-            gdb.write(info(f"Multiple peripherals with prefix '{periph_name}' found, please specify more!\n"))
+            gdb.write(
+                info(
+                    f"Multiple peripherals with prefix '{periph_name}' found, please specify more!\n"
+                )
+            )
             GdbSvdCmd.print_desc_peripherals(self, periphs, periph_prefix=periph_name)
             return
-        
+
         # this means we have only one peripheral
         periph = periphs[0]
         breadcrumbs = f"{periph.name}"
 
         if periph.name != periph_name:
-            gdb.write(warning(f"Only one peripheral with prefix '{periph_name}' found: {periph.name}\n"))
+            gdb.write(
+                warning(
+                    f"Only one peripheral with prefix '{periph_name}' found: {periph.name}\n"
+                )
+            )
 
         if len(args) == 1:
             GdbSvdCmd.print_desc_registers(self, breadcrumbs, periph.registers)
@@ -462,39 +517,56 @@ class GdbSvdInfoCmd(GdbSvdCmd):
         regs = list(filter(lambda x: x.name.startswith(reg_name), periph.registers))
 
         if len(regs) == 0:
-            gdb.write(error(f"No registers with prefix '{reg_name}' for peripheral '{periph.name}'\n"))
+            gdb.write(
+                error(
+                    f"No registers with prefix '{reg_name}' for peripheral '{periph.name}'\n"
+                )
+            )
             GdbSvdCmd.print_desc_registers(self, breadcrumbs, periph.registers)
             return
-        
+
         if len(regs) > 1:
-            gdb.write(info(f"Multiple registers with prefix '{reg_name}' found for peripheral '{periph.name}, please specify more!\n"))
+            gdb.write(
+                info(
+                    f"Multiple registers with prefix '{reg_name}' found for peripheral '{periph.name}, please specify more!\n"
+                )
+            )
             GdbSvdCmd.print_desc_registers(self, breadcrumbs, regs, reg_prefix=reg_name)
             return
-        
+
         # this means we have only one register
         reg = regs[0]
         breadcrumbs += f":{reg.name}"
 
         if reg.name != reg_name:
-            gdb.write(warning(f"Only one register with prefix '{reg_name}' found: {reg.name}\n"))
-        
+            gdb.write(
+                warning(
+                    f"Only one register with prefix '{reg_name}' found: {reg.name}\n"
+                )
+            )
+
         if len(args) == 2:
             GdbSvdCmd.print_desc_fields(self, breadcrumbs, reg.fields)
             return
-        
+
         field_name = args[2].upper()
         fields = list(filter(lambda x: x.name.startswith(field_name), reg.fields))
 
         if len(fields) == 0:
-            gdb.write(error(f"No fields found with prefix '{field_name}' in register '{reg.name}'\n"))
+            gdb.write(
+                error(
+                    f"No fields found with prefix '{field_name}' in register '{reg.name}'\n"
+                )
+            )
             GdbSvdCmd.print_desc_fields(self, breadcrumbs, reg.fields)
             return
 
         GdbSvdCmd.print_desc_fields(self, breadcrumbs, fields, field_prefix=field_name)
 
+
 class GdbSvdDumpCmd(GdbSvdCmd):
-    """Get register(s) value(s): svd dump <filename> [peripheral]
-    """
+    """Get register(s) value(s): svd dump <filename> [peripheral]"""
+
     def __init__(self, device, peripherals):
         GdbSvdCmd.__init__(self, device, peripherals)
         gdb.Command.__init__(self, "svd dump", gdb.COMMAND_DATA)
@@ -526,7 +598,12 @@ class GdbSvdDumpCmd(GdbSvdCmd):
 
             if len(args) >= 2:
                 periph_name = args[1].upper()
-                periphs = list(filter(lambda x: x.name.startswith(periph_name), self.device.peripherals))
+                periphs = list(
+                    filter(
+                        lambda x: x.name.startswith(periph_name),
+                        self.device.peripherals,
+                    )
+                )
                 regs = None
             else:
                 periphs = self.device.peripherals
