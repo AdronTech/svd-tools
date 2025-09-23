@@ -51,6 +51,36 @@ def heading(columns):
     return [f"{Fore.BLACK}{col}{Style.RESET_ALL}" for col in columns]
 
 
+def allowed_to_read(access: SVDAccessType):
+    return access in [
+        None,
+        SVDAccessType.READ_ONLY,
+        SVDAccessType.READ_WRITE,
+        SVDAccessType.READ_WRITE_ONCE,
+    ]
+
+
+def allowed_to_write(access: SVDAccessType):
+    return access in [
+        None,
+        SVDAccessType.WRITE_ONLY,
+        SVDAccessType.READ_WRITE,
+        SVDAccessType.WRITE_ONCE,
+        SVDAccessType.READ_WRITE_ONCE,
+    ]
+
+
+# TODO finish this
+class NotReadableError(Exception):
+    def __init__(self):
+        super().__init__("Register not readable, check access type.")
+
+
+class NotWritableError(Exception):
+    def __init__(self):
+        super().__init__("Register not writable, check access type.")
+
+
 class GdbSvd(gdb.Command):
     """The CMSIS SVD (System View Description) inspector commands
 
@@ -92,7 +122,7 @@ class GdbSvd(gdb.Command):
             GdbSvdGetCmd(device, peripherals)
             GdbSvdSetCmd(device, peripherals)
             GdbSvdInfoCmd(device, peripherals)
-            GdbSvdDumpCmd(device, peripherals)
+            # GdbSvdDumpCmd(device, peripherals)
 
 
 if __name__ == "__main__":
@@ -250,9 +280,7 @@ class GdbSvdCmd(gdb.Command):
         desc_table = AsciiTable(table_rows, title=f" {highlight(reg_name)} Fields ")
         gdb.write(f"{desc_table.table}\n")
 
-    def print_registers(
-        self, peripheral, registers, output_file_name="None", syntax_highlighting=True
-    ):
+    def print_registers(self, peripheral, registers):
         regs_table = []
         reg_val = []
         regs_table.append(["name", "address", "value", "fields"])
@@ -268,7 +296,7 @@ class GdbSvdCmd(gdb.Command):
                         (1 << f["bit_width"]) - 1
                     )
 
-                    if syntax_highlighting and f["value"] != field_reset_value:
+                    if f["value"] != field_reset_value:
                         f_str.append("\033[94m{name}={value:#x}\033[0m".format(**f))
                     else:
                         f_str.append("{name}={value:#x}".format(**f))
@@ -281,7 +309,7 @@ class GdbSvdCmd(gdb.Command):
             elif r["value"] is None:
                 val_str = r["access"].value
             else:
-                if syntax_highlighting and r["value"] != r["reset_value"]:
+                if r["value"] != r["reset_value"]:
                     val_str = "\033[94m{value:#x}({reset_value:#x})\033[0m".format(**r)
                 else:
                     val_str = "{value:#x}({reset_value:#x})".format(**r)
@@ -289,15 +317,7 @@ class GdbSvdCmd(gdb.Command):
             regs_table.append([r["name"], r["addr"], val_str, f_str])
         rval_table = AsciiTable(regs_table, title=peripheral.name)
 
-        if output_file_name == "None":
-            gdb.write(f"{rval_table.table}\n")
-        else:
-            try:
-                file_object = open(output_file_name, "a")
-                file_object.write(f"{rval_table.table}\n")
-                file_object.close()
-            except:
-                gdb.write("Error writting to file \n")
+        gdb.write(f"{rval_table.table}\n")
 
     def set_register(self, peripheral, register, value, field=None):
         val = value
@@ -564,58 +584,58 @@ class GdbSvdInfoCmd(GdbSvdCmd):
         GdbSvdCmd.print_desc_fields(self, breadcrumbs, fields, field_prefix=field_name)
 
 
-class GdbSvdDumpCmd(GdbSvdCmd):
-    """Get register(s) value(s): svd dump <filename> [peripheral]"""
+# class GdbSvdDumpCmd(GdbSvdCmd):
+#     """Get register(s) value(s): svd dump <filename> [peripheral]"""
 
-    def __init__(self, device, peripherals):
-        GdbSvdCmd.__init__(self, device, peripherals)
-        gdb.Command.__init__(self, "svd dump", gdb.COMMAND_DATA)
+#     def __init__(self, device, peripherals):
+#         GdbSvdCmd.__init__(self, device, peripherals)
+#         gdb.Command.__init__(self, "svd dump", gdb.COMMAND_DATA)
 
-    def complete(self, text, word):
-        args = str(text).split(" ")
-        nb_args = len(args)
+#     def complete(self, text, word):
+#         args = str(text).split(" ")
+#         nb_args = len(args)
 
-        if nb_args == 1:
-            return gdb.COMPLETE_FILENAME
+#         if nb_args == 1:
+#             return gdb.COMPLETE_FILENAME
 
-        if nb_args > 2:
-            return gdb.COMPLETE_NONE
+#         if nb_args > 2:
+#             return gdb.COMPLETE_NONE
 
-        # remove first argument <filename>
-        args.pop(0)
+#         # remove first argument <filename>
+#         args.pop(0)
 
-        return GdbSvdCmd.complete(self, " ".join(args), word)
+#         return GdbSvdCmd.complete(self, " ".join(args), word)
 
-    def invoke(self, arg, from_tty):
-        args = str(arg).split(" ")
-        if len(args) < 1 or len(args) > 2:
-            gdb.write("Invalid parameter\n")
-            gdb.execute("help svd dump")
-            return
-        try:
-            output_file_name = args[0]
-            gdb.write(f"Print to file: {output_file_name}\n")
+#     def invoke(self, arg, from_tty):
+#         args = str(arg).split(" ")
+#         if len(args) < 1 or len(args) > 2:
+#             gdb.write("Invalid parameter\n")
+#             gdb.execute("help svd dump")
+#             return
+#         try:
+#             output_file_name = args[0]
+#             gdb.write(f"Print to file: {output_file_name}\n")
 
-            if len(args) >= 2:
-                periph_name = args[1].upper()
-                periphs = list(
-                    filter(
-                        lambda x: x.name.startswith(periph_name),
-                        self.device.peripherals,
-                    )
-                )
-                regs = None
-            else:
-                periphs = self.device.peripherals
+#             if len(args) >= 2:
+#                 periph_name = args[1].upper()
+#                 periphs = list(
+#                     filter(
+#                         lambda x: x.name.startswith(periph_name),
+#                         self.device.peripherals,
+#                     )
+#                 )
+#                 regs = None
+#             else:
+#                 periphs = self.device.peripherals
 
-            try:
-                file_object = open(output_file_name, "w")
-                file_object.write("Registers Dump\n")
-                file_object.close()
-                for per in periphs:
-                    regs = per.registers
-                    GdbSvdCmd.print_registers(self, per, regs, output_file_name, False)
-            except:
-                gdb.write(f"Error writting to file: {output_file_name}\n")
-        except:
-            gdb.write("Error cannot dump registers\n")
+#             try:
+#                 file_object = open(output_file_name, "w")
+#                 file_object.write("Registers Dump\n")
+#                 file_object.close()
+#                 for per in periphs:
+#                     regs = per.registers
+#                     GdbSvdCmd.print_registers(self, per, regs, output_file_name, False)
+#             except:
+#                 gdb.write(f"Error writting to file: {output_file_name}\n")
+#         except:
+#             gdb.write("Error cannot dump registers\n")
