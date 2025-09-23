@@ -377,7 +377,7 @@ class GdbSvdGetCmd(GdbSvdCmd):
     def invoke(self, arg, from_tty):
         args = str(arg).split(" ")
         if len(args) > 2:
-            gdb.write("Invalid parameter\n")
+            gdb.write(error("Invalid parameter\n"))
             gdb.execute("help svd get")
             return
 
@@ -385,7 +385,7 @@ class GdbSvdGetCmd(GdbSvdCmd):
             periph_name = args[0].upper()
             periph = self.peripherals[periph_name]
         except:
-            gdb.write("Invalid peripheral name\n")
+            gdb.write(error(f"No peripheral with prefix '{periph_name}'\n"))
             GdbSvdCmd.print_desc_peripherals(self, self.device.peripherals)
             return
 
@@ -555,7 +555,7 @@ class GdbSvdInfoCmd(GdbSvdCmd):
         if len(fields) == 0:
             gdb.write(
                 error(
-                    f"No fields found with prefix '{field_name}' in register '{reg.name}'\n"
+                    f"No fields with prefix '{field_name}' in register '{reg.name}'\n"
                 )
             )
             GdbSvdCmd.print_desc_fields(self, breadcrumbs, reg.fields)
