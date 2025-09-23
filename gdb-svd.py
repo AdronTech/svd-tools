@@ -185,17 +185,17 @@ class GdbSvdCmd(gdb.Command):
 
         return gdb.COMPLETE_NONE
 
-    def get_registers_val(self, peripheral, registers):
+    def get_registers_val(self, registers):
         registers_val = []
 
         for reg in registers:
-            addr = peripheral.base_address + reg.address_offset
+            addr = reg.parent.base_address + reg.address_offset
 
             fval = ""
             val = 0
             v_err = None
             try:
-                val = self.read(peripheral, reg)
+                val = self.read(reg.parent.base_address, reg)
 
                 if val is not None:
                     fval = self.get_fields_val(reg.fields, val)
@@ -250,7 +250,7 @@ class GdbSvdCmd(gdb.Command):
         desc_table = AsciiTable(table_show, title=" Peripherals ")
         gdb.write(f"{desc_table.table}\n")
 
-    def print_desc_registers(self, periph_name, registers, reg_prefix=""):
+    def print_desc_registers(self, breadcrumbs, registers, reg_prefix=""):
         table_rows = []
         table_rows.append(heading(["name", "address", "access", "description"]))
         for register in registers:
@@ -261,11 +261,11 @@ class GdbSvdCmd(gdb.Command):
             table_rows.append([name, f"{addr:#08x}", register.access.value, desc])
 
         desc_table = AsciiTable(
-            table_rows, title=f" {highlight(periph_name)} Registers "
+            table_rows, title=f" {highlight(breadcrumbs)} Registers "
         )
         gdb.write(f"{desc_table.table}\n")
 
-    def print_desc_fields(self, reg_name, fields, field_prefix=""):
+    def print_desc_fields(self, breadcrumbs, fields, field_prefix=""):
         table_rows = []
         table_rows.append(heading(["name", "[msb:lsb]", "access", "description"]))
         for field in fields:
@@ -277,15 +277,15 @@ class GdbSvdCmd(gdb.Command):
             desc = "\n".join(wrap(field.description, self.column_with))
             table_rows.append([name, bit_range, field.access.value, desc])
 
-        desc_table = AsciiTable(table_rows, title=f" {highlight(reg_name)} Fields ")
+        desc_table = AsciiTable(table_rows, title=f" {highlight(breadcrumbs)} Fields ")
         gdb.write(f"{desc_table.table}\n")
 
-    def print_registers(self, peripheral, registers):
+    def print_registers(self, breadcrumbs, registers, reg_prefix=""):
         regs_table = []
         reg_val = []
-        regs_table.append(["name", "address", "value", "fields"])
+        regs_table.append(heading(["name", "address", "value", "fields"]))
 
-        reg_val += self.get_registers_val(peripheral, registers)
+        reg_val += self.get_registers_val(registers)
 
         for r in reg_val:
             f_str = []
@@ -314,8 +314,11 @@ class GdbSvdCmd(gdb.Command):
                 else:
                     val_str = "{value:#x}({reset_value:#x})".format(**r)
 
-            regs_table.append([r["name"], r["addr"], val_str, f_str])
-        rval_table = AsciiTable(regs_table, title=peripheral.name)
+            name = colorize_prefix(reg_prefix, r["name"])
+            regs_table.append([name, r["addr"], val_str, f_str])
+        rval_table = AsciiTable(
+            regs_table, title=f" {highlight(breadcrumbs)} Registers "
+        )
 
         gdb.write(f"{rval_table.table}\n")
 
@@ -401,27 +404,53 @@ class GdbSvdGetCmd(GdbSvdCmd):
             gdb.execute("help svd get")
             return
 
-        try:
-            periph_name = args[0].upper()
-            periph = self.peripherals[periph_name]
-        except:
+        periph_name = args[0].upper()
+        periphs = list(
+            filter(lambda x: x.name.startswith(periph_name), self.device.peripherals)
+        )
+
+        if len(periphs) == 0:
             gdb.write(error(f"No peripheral with prefix '{periph_name}'\n"))
             GdbSvdCmd.print_desc_peripherals(self, self.device.peripherals)
             return
 
-        try:
-            regs = periph.registers
+        if len(periphs) > 1:
+            gdb.write(
+                info(
+                    f"Multiple peripherals with prefix '{periph_name}' found, please specify more!\n"
+                )
+            )
+            GdbSvdCmd.print_desc_peripherals(self, periphs, periph_prefix=periph_name)
+            return
 
-            if len(args) == 2:
-                reg_name = args[1].upper()
-                regs = [[r for r in regs if r.name == reg_name][0]]
+        # this means we have only one peripheral
+        periph = periphs[0]
+        breadcrumbs = f"{periph.name}"
 
-            GdbSvdCmd.print_registers(self, periph, regs)
+        if periph.name != periph_name:
+            gdb.write(
+                warning(
+                    f"Only one peripheral with prefix '{periph_name}' found: {periph.name}\n"
+                )
+            )
 
-        except Exception as inst:
-            gdb.write(f"{inst}\n")
-        except:
-            gdb.write("Error cannot get the value\n")
+        if len(args) == 1:
+            GdbSvdCmd.print_registers(self, breadcrumbs, periph.registers)
+            return
+
+        reg_name = args[1].upper()
+        regs = list(filter(lambda x: x.name.startswith(reg_name), periph.registers))
+
+        if len(regs) == 0:
+            gdb.write(
+                error(
+                    f"No registers with prefix '{reg_name}' for peripheral '{periph.name}'\n"
+                )
+            )
+            GdbSvdCmd.print_desc_registers(self, breadcrumbs, periph.registers)
+            return
+
+        GdbSvdCmd.print_registers(self, breadcrumbs, regs, reg_prefix=reg_name)
 
 
 class GdbSvdSetCmd(GdbSvdCmd):
