@@ -329,7 +329,7 @@ class GdbSvdCmd(gdb.Command):
             mask = max_val << field.bit_offset
 
             # read register value with gdb
-            val = self.read(peripheral, register)
+            val = self.read(peripheral.base_address, register)
             if val is None:
                 raise Exception("Register not readable")
 
@@ -337,9 +337,9 @@ class GdbSvdCmd(gdb.Command):
             val |= value << field.bit_offset
 
         # write val to target
-        self.write(peripheral, register, val)
+        self.write(peripheral.base_address, register, val)
 
-    def read(self, peripheral, register):
+    def read(self, peripheral_base_addr, register):
         """Read register and return an integer"""
         # access could be not defined for a register
         if register.access in [
@@ -348,7 +348,7 @@ class GdbSvdCmd(gdb.Command):
             SVDAccessType.READ_WRITE,
             SVDAccessType.READ_WRITE_ONCE,
         ]:
-            addr = peripheral.base_address + register.address_offset
+            addr = peripheral_base_addr + register.address_offset
             cmd = self.read_cmd.format(address=addr)
             pattern = re.compile(r"(?P<ADDR>\w+):( *?(?P<VALUE>[a-f0-9]+))")
 
@@ -362,7 +362,7 @@ class GdbSvdCmd(gdb.Command):
         else:
             return None
 
-    def write(self, peripheral, register, val):
+    def write(self, peripheral_base_addr, register, val):
         """Write data to memory"""
         if register.access in [
             None,
@@ -371,7 +371,7 @@ class GdbSvdCmd(gdb.Command):
             SVDAccessType.WRITE_ONCE,
             SVDAccessType.READ_WRITE_ONCE,
         ]:
-            addr = peripheral.base_address + register.address_offset
+            addr = peripheral_base_addr + register.address_offset
             cmd = self.write_cmd.format(address=addr, value=val)
 
             gdb.execute(cmd, False, True)
