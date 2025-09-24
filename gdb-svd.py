@@ -77,6 +77,19 @@ def get_access_str(access: SVDAccessType | None):
     return access.value
 
 
+def parse_args(raw: str):
+    """Parse a raw argument string into a list using gdb facilities.
+
+    Using gdb.string_to_argv ensures proper handling of quoting and
+    escaping (spaces inside quotes, etc.) compared to naive split.
+    """
+    try:
+        return gdb.string_to_argv(raw)
+    except Exception:
+        # Fall back to an empty list on unexpected parsing failure
+        return []
+
+
 class NotReadableError(Exception):
     def __init__(self):
         super().__init__("Register not readable, check access type.")
@@ -144,12 +157,12 @@ class GdbSvdCmd(gdb.Command):
 
         try:
             version = gdb.execute("monitor version", False, True)
-        except:
+        except Exception:
             pass
 
         try:
             gdbserver = gdb.execute("monitor gdbserver status", False, True)
-        except:
+        except Exception:
             pass
 
         if "Open On-Chip Debugger" in version:
@@ -164,7 +177,7 @@ class GdbSvdCmd(gdb.Command):
             self.write_cmd = "set *(int *){address:#x}={value:#x}"
 
     def complete(self, text, word):
-        args = str(text).split(" ")
+        args = parse_args(str(text))
         nb_args = len(args)
 
         if nb_args == 1:
@@ -357,7 +370,7 @@ class GdbSvdGetCmd(GdbSvdCmd):
         gdb.Command.__init__(self, "svd get", gdb.COMMAND_DATA)
 
     def complete(self, text, word):
-        args = str(text).split(" ")
+        args = parse_args(str(text))
         if len(args) > 2:
             return gdb.COMPLETE_NONE
 
@@ -365,7 +378,7 @@ class GdbSvdGetCmd(GdbSvdCmd):
 
     def invoke(self, arg, from_tty):
         try:
-            args = str(arg).split(" ")
+            args = parse_args(str(arg))
             if len(args) > 2:
                 gdb.write(error("Invalid parameter\n"))
                 gdb.execute("help svd get")
@@ -435,19 +448,19 @@ class GdbSvdSetCmd(GdbSvdCmd):
         gdb.Command.__init__(self, "svd set", gdb.COMMAND_DATA)
 
     def complete(self, text, word):
-        args = str(text).split(" ")
+        args = parse_args(str(text))
         if len(args) > 3:
             return gdb.COMPLETE_NONE
 
         return GdbSvdCmd.complete(self, text, word)
 
     def invoke(self, arg, from_tty):
-        args = str(arg).split(" ")
+        args = parse_args(str(arg))
 
         try:
             periph_name = args[0].upper()
             periph = self.peripherals[periph_name]
-        except:
+        except Exception:
             gdb.write("Invalid peripheral name\n")
             GdbSvdCmd.print_desc_peripherals(self, self.device.peripherals)
             return
@@ -473,7 +486,7 @@ class GdbSvdSetCmd(GdbSvdCmd):
         except Exception as inst:
             gdb.write(f"{inst}\n")
 
-        except:
+        except Exception:
             gdb.write("Error cannot set the value\n")
 
 
@@ -485,7 +498,7 @@ class GdbSvdInfoCmd(GdbSvdCmd):
         gdb.Command.__init__(self, "svd info", gdb.COMMAND_DATA)
 
     def complete(self, text, word):
-        args = str(text).split(" ")
+        args = parse_args(str(text))
         if len(args) > 3:
             return gdb.COMPLETE_NONE
 
@@ -497,7 +510,7 @@ class GdbSvdInfoCmd(GdbSvdCmd):
                 GdbSvdCmd.print_desc_peripherals(self, self.device.peripherals)
                 return
 
-            args = str(arg).split(" ")
+            args = parse_args(str(arg))
             if not 1 <= len(args) <= 3:
                 gdb.write(error("Invalid parameter\n"))
                 gdb.execute("help svd info")
@@ -608,7 +621,7 @@ class GdbSvdInfoCmd(GdbSvdCmd):
 #         gdb.Command.__init__(self, "svd dump", gdb.COMMAND_DATA)
 
 #     def complete(self, text, word):
-#         args = str(text).split(" ")
+#         args = parse_args(str(text))
 #         nb_args = len(args)
 
 #         if nb_args == 1:
@@ -623,7 +636,7 @@ class GdbSvdInfoCmd(GdbSvdCmd):
 #         return GdbSvdCmd.complete(self, " ".join(args), word)
 
 #     def invoke(self, arg, from_tty):
-#         args = str(arg).split(" ")
+#         args = parse_args(str(arg))
 #         if len(args) < 1 or len(args) > 2:
 #             gdb.write("Invalid parameter\n")
 #             gdb.execute("help svd dump")
