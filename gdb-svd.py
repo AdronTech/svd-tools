@@ -177,36 +177,65 @@ class GdbSvdCmd(gdb.Command):
             self.write_cmd = "set *(int *){address:#x}={value:#x}"
 
     def complete(self, text, word):
-        args = parse_args(str(text))
-        nb_args = len(args)
+        try:
+            args = parse_args(str(text))
+            is_space_at_end = text.endswith(" ")
+            nb_args = len(args)
+            peripheral_arg = args[0].upper() if nb_args > 0 else ""
+            register_arg = args[1].upper() if nb_args > 1 else ""
+            field_arg = args[2].upper() if nb_args > 2 else ""
 
-        if nb_args == 1:
-            peripheral_matches = filter(
-                lambda x: x.upper().startswith(args[0].upper()), self.peripherals
+            peripheral_names = self.peripherals.keys()
+            peripheral_matches = list(
+                filter(lambda x: x.upper().startswith(peripheral_arg), peripheral_names)
             )
-            return list(peripheral_matches)
 
-        peripheral_name = args[0].upper()
-        peripheral = self.peripherals[peripheral_name]
-        register_names = [reg.name for reg in peripheral.registers]
+            if len(peripheral_matches) != 1:
+                if nb_args <= 1:
+                    return peripheral_matches
+                return gdb.COMPLETE_NONE
 
-        if nb_args == 2 and register_names:
-            register_matches = filter(
-                lambda x: x.upper().startswith(args[1].upper()), register_names
+            peripheral_name = peripheral_matches[0]
+            if peripheral_name != peripheral_arg or (
+                nb_args == 1 and not is_space_at_end
+            ):
+                return peripheral_matches
+
+            peripheral = self.peripherals[peripheral_name]
+            register_names = [reg.name for reg in peripheral.registers]
+            register_matches = list(
+                filter(lambda x: x.upper().startswith(register_arg), register_names)
             )
-            return list(register_matches)
 
-        register_name = args[1].upper()
-        register = [r for r in peripheral.registers if r.name == register_name][0]
-        field_names = [field.name for field in register.fields]
+            if len(register_matches) != 1:
+                if nb_args <= 2:
+                    return register_matches
+                return gdb.COMPLETE_NONE
 
-        if nb_args == 3 and field_names:
-            field_matches = filter(
-                lambda x: x.upper().startswith(args[2].upper()), field_names
+            register_name = register_matches[0]
+            if register_name != register_arg or (nb_args == 2 and not is_space_at_end):
+                return register_matches
+
+            register = [r for r in peripheral.registers if r.name == register_arg][0]
+            field_names = [field.name for field in register.fields]
+            field_matches = list(
+                filter(lambda x: x.upper().startswith(field_arg), field_names)
             )
-            return list(field_matches)
 
-        return gdb.COMPLETE_NONE
+            if len(field_matches) != 1:
+                if nb_args <= 3:
+                    return field_matches
+                return gdb.COMPLETE_NONE
+
+            field_name = field_matches[0]
+            if field_name != field_arg or (nb_args == 3 and not is_space_at_end):
+                return field_matches
+
+            return gdb.COMPLETE_NONE
+
+        except Exception as inst:
+            gdb.write(error(f"{inst}\n"))
+            traceback.print_exc()
 
     def print_desc_peripherals(self, peripherals, peripheral_prefix=""):
         table_show = []
