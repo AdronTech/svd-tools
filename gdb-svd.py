@@ -177,6 +177,10 @@ class GdbSvdCmd(gdb.Command):
             self.write_cmd = "set *(int *){address:#x}={value:#x}"
 
     def complete(self, text, word):
+        def prefix_matches(options, prefix):
+            p = prefix.upper()
+            return [o for o in options if o.upper().startswith(p)]
+
         try:
             args = parse_args(str(text))
             is_space_at_end = text.endswith(" ")
@@ -186,9 +190,7 @@ class GdbSvdCmd(gdb.Command):
             field_arg = args[2].upper() if nb_args > 2 else ""
 
             peripheral_names = self.peripherals.keys()
-            peripheral_matches = list(
-                filter(lambda x: x.upper().startswith(peripheral_arg), peripheral_names)
-            )
+            peripheral_matches = prefix_matches(peripheral_names, peripheral_arg)
 
             if len(peripheral_matches) != 1:
                 if nb_args <= 1:
@@ -203,9 +205,7 @@ class GdbSvdCmd(gdb.Command):
 
             peripheral = self.peripherals[peripheral_name]
             register_names = [reg.name for reg in peripheral.registers]
-            register_matches = list(
-                filter(lambda x: x.upper().startswith(register_arg), register_names)
-            )
+            register_matches = prefix_matches(register_names, register_arg)
 
             if len(register_matches) != 1:
                 if nb_args <= 2:
@@ -218,9 +218,7 @@ class GdbSvdCmd(gdb.Command):
 
             register = [r for r in peripheral.registers if r.name == register_arg][0]
             field_names = [field.name for field in register.fields]
-            field_matches = list(
-                filter(lambda x: x.upper().startswith(field_arg), field_names)
-            )
+            field_matches = prefix_matches(field_names, field_arg)
 
             if len(field_matches) != 1:
                 if nb_args <= 3:
@@ -404,6 +402,8 @@ class GdbSvdGetCmd(GdbSvdCmd):
         args = parse_args(str(text))
         if len(args) > 2:
             return gdb.COMPLETE_NONE
+        if len(args) == 2 and text.endswith(" "):
+            return gdb.COMPLETE_NONE
 
         return GdbSvdCmd.complete(self, text, word)
 
@@ -487,6 +487,8 @@ class GdbSvdSetCmd(GdbSvdCmd):
         args = parse_args(str(text))
         if len(args) > 3:
             return gdb.COMPLETE_NONE
+        if len(args) == 3 and text.endswith(" "):
+            return gdb.COMPLETE_NONE
 
         return GdbSvdCmd.complete(self, text, word)
 
@@ -536,6 +538,8 @@ class GdbSvdInfoCmd(GdbSvdCmd):
     def complete(self, text, word):
         args = parse_args(str(text))
         if len(args) > 3:
+            return gdb.COMPLETE_NONE
+        if len(args) == 3 and text.endswith(" "):
             return gdb.COMPLETE_NONE
 
         return GdbSvdCmd.complete(self, text, word)
