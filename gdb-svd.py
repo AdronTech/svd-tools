@@ -377,12 +377,8 @@ class GdbSvdCmd(gdb.Command):
         cmd = self.read_cmd.format(address=addr)
         pattern = re.compile(r"(?P<ADDR>\w+):( *?(?P<VALUE>[a-f0-9]+))")
 
-        try:
-            match = re.search(pattern, gdb.execute(cmd, False, True))
-            val = int(match.group("VALUE"), 16)
-        except Exception as err:
-            # if openocd can't access to addr => data abort
-            return err
+        match = re.search(pattern, gdb.execute(cmd, False, True))
+        val = int(match.group("VALUE"), 16)
         return val
 
     def write(self, register, val):
